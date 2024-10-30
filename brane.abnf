@@ -1,0 +1,154 @@
+///// NON-TERMINALS /////
+
+// Statements
+Stmts ::= Stmts Stmt
+        | Stmt
+ Stmt ::= Attribute | AttributeInner | Assign | Block | ClassDecl | ExprStmt | For | FuncDecl
+        | If | Import | LetAssign | Parallel | Return | While
+
+     Attribute ::= POUND LBRACKET AttrKeyPair RBRACKET
+                 | POUND LBRACKET AttrList RBRACKET
+AttributeInner ::= POUND NOT LBRACKET AttrKeyPair RBRACKET
+                 | POUND NOT LBRACKET AttrList RBRACKET
+   AttrKeyPair ::= IDENT EQUAL Literal
+      AttrList ::= IDENT LPAREN Literals RPAREN
+      Literals ::= Literals Literal
+                 | Literal
+
+Assign ::= IDENT ASSIGN Expr SEMICOLON
+
+Block ::= LBRACE Stmts RBRACE
+        | LBRACE RBRACE
+
+ ClassDecl ::= CLASS IDENT LBRACE ClassStmts RBRACE
+ClassStmts ::= ClassStmts Prop
+             | ClassStmts FuncDecl
+             | Prop
+             | FuncDecl
+      Prop ::= IDENT COLON IDENT SEMICOLON
+
+ExprStmt ::= Expr SEMICOLON
+
+For ::= FOR LPAREN LetAssign Expr SEMICOLON IDENT ASSIGN Expr RPAREN Block
+
+FuncDecl ::= FUNCTION IDENT LPAREN Args RPAREN Block
+           | FUNCTION IDENT LPAREN RPAREN Block
+    Args ::= Args COMMA IDENT
+           | IDENT
+
+If ::= IF LPAREN Expr RPAREN Block
+     | IF LPAREN Expr RPAREN Block ELSE Block
+
+Import ::= IMPORT IDENT SEMICOLON
+         | IMPORT IDENT LBRACKET SEMVER RBRACKET SEMICOLON
+
+LetAssign ::= LET IDENT ASSIGN Expr SEMICOLON
+
+Parallel ::= PARALLEL LBRACKET PBlocks RBRACKET SEMICOLON
+           | PARALLEL LBRACKET IDENT RBRACKET LBRACKET PBlocks RBRACKET SEMICOLON
+           | LET IDENT ASSIGN PARALLEL LBRACKET PBlocks RBRACKET SEMICOLON
+           | LET IDENT ASSIGN PARALLEL LBRACKET IDENT RBRACKET LBRACKET PBlocks RBRACKET SEMICOLON
+ PBlocks ::= ParallelBlocks COMMA Block
+           | ParallelBlocks COMMA On
+           | Block
+           | On
+
+Return ::= RETURN Expr SEMICOLON
+         | RETURN SEMICOLON
+
+While ::= WHILE LPAREN Expr RPAREN Block
+
+
+
+// Expressions
+Exprs ::= Exprs COMMA Expr
+        | Expr
+ Expr ::= LPAREN Expr RPAREN
+        | Expr BinOp Expr
+        | UnaOp Expr
+        | Array | ArrayIndex | Call | IDENT | Instance | Literal
+        | Projection
+BinOp ::= AND AND | EQUAL | GREATER | GREATEREQ | LESS | LESSEQ | MINUS | NOTEQ
+        | OR OR | PRECENTAGE | PLUS | SLASH | STAR
+UnaOp ::= NOT | MINUS
+
+Array ::= LBRACKET Exprs RBRACKET
+        | LBRACKET RBRACKET
+
+ArrayIndex ::= Array LBRACKET Expr RBRACKET
+
+Call ::= IDENT LPAREN Exprs RPAREN
+       | Projection LPAREN Exprs RPAREN
+       | IDENT LPAREN RPAREN
+       | Projection LPAREN RPAREN
+
+     Instance ::= NEW IDENT LBRACE InstanceProps RBRACE
+                | NEW IDENT LBRACE RBRACE
+InstanceProps ::= InstanceProps COMMA InstanceProp
+                | InstanceProp
+ InstanceProp ::= IDENT ASSIGN Expr
+
+Literal ::= BOOLEAN | INTEGER | NULL | REAL | STRING
+
+Projection ::= Projection DOT IDENT
+             | IDENT DOT IDENT
+
+///// TERMINALS /////
+
+// Keywords (and other tokens needing to be parsed first)
+   ASSIGN ::= ":="
+    BREAK ::= "break"
+    CLASS ::= "class"
+ CONTINUE ::= "continue"
+     ELSE ::= "else"
+      FOR ::= "for"
+ FUNCTION ::= "func"
+GREATEREQ ::= ">="
+       IF ::= "if"
+   IMPORT ::= "import"
+   LESSEQ ::= "<="
+      LET ::= "let"
+      NEW ::= "new"
+    NOTEQ ::= "!="
+     NULL ::= "null"
+       ON ::= "on"
+ PARALLEL ::= "parallel"
+   RETURN ::= "return"
+    WHILE ::= "while"
+
+
+
+// Punctuation
+       AND ::= "&"
+        AT ::= "@"
+    LBRACE ::= "{"
+    RBRACE ::= "}"
+  LBRACKET ::= "["
+  RBRACKET ::= "}"
+     COLON ::= ":"
+     COMMA ::= ","
+       DOT ::= "."
+     EQUAL ::= "="
+   GREATER ::= ">"
+      LESS ::= "<"
+     MINUS ::= "-"
+       NOT ::= "!"
+        OR ::= "|"
+    LPAREN ::= "("
+    RPAREN ::= ")"
+PERCENTAGE ::= "%"
+      PLUS ::= "+"
+     POUND ::= "#"
+ SEMICOLON ::= ";"
+     SLASH ::= "/"
+      STAR ::= "*"
+
+
+
+// Tokens with values
+ SEMVER ::= r"[0-9]+\.[0-9]+\.[0-9]+"                       // 1
+   REAL ::= r"([0-9]_)*\.([0-9]_)+([eE][+\-]?([0-9]_)+)?"   // 2
+BOOLEAN ::= r"(true|false)"
+  IDENT ::= r"[a-zA-Z_][a-zA-Z_0-9]*"                       // 3
+INTEGER ::= r"([0-9]_)+"
+ STRING ::= r"\"([^\"\\]|\\[\"'ntr\\])*\""
