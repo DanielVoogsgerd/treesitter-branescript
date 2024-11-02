@@ -59,33 +59,32 @@ module.exports = grammar({
     // Statement types
 
     // Attributes
-    attribute: $ => seq('#[', $.attribute_key_pair, ']'),
-    attribute_inner: $ => seq('#![', $.attribute_list, ']'),
+    attribute: $ => seq('#[', $.attribute_value, ']'),
+    attribute_inner: $ => seq('#![', $.attribute_value, ']'),
+    attribute_value: $ => choice($.attribute_key_pair, $.attribute_list),
     attribute_key_pair: $ => seq($.identifier, '=', $.literal),
-    attribute_list: $ => seq($.identifier, '(', repeat1($.literal), ')'),
+    attribute_list: $ => seq(field("key", $.identifier), '(', repeat1($.literal), ')'),
 
-    assign_statement: $ => seq($.identifier, ':=', $.expression, ';'),
-    // FIXME: ABNF disallows single statements
-    block_statement: $ => seq('{', repeat1($._statement), '}'),
+    assign_statement: $ => seq($.identifier, ASSIGN, $.expression, ';'),
+    block_statement: $ => seq('{', repeat($._statement), '}'),
 
-    // TODO:
-    class_declaration: $ => seq(CLASS, $.identifier, '{', repeat1($.class_statement), '}'),
-    class_statement: $ => choice($.property, $.function_declaration),
+    class_declaration: $ => seq(CLASS, field("name", $.identifier), '{', repeat1($._class_statement), '}'),
+    _class_statement: $ => choice($.property, $.function_declaration, $.line_comment),
 
-    property: $ => seq($.identifier, ':', $.identifier, ';'),
+    property: $ => seq(field("field", $.identifier), ':', field("type", $.identifier), ';'),
 
-    expression_statement: $ => seq($.expression, ';'),
+    expression_statement: $ => seq($._expression, ';'),
 
-    for_statement: $ => seq(FOR, "(", $.let_assign_statement, $.expression, ';', $.identifier, ASSIGN, $.expression, ')', $.block_statement),
+    for_statement: $ => seq(FOR, "(", $.let_assign_statement, $._expression, ';', $.identifier, ASSIGN, $._expression, ')', $.block_statement),
 
-    function_declaration: $ => seq(FUNCTION, $.identifier, '(', optional($.function_arguments), ')', $.block_statement),
-    function_arguments: $ => commaSep1($.identifier),
+    function_declaration: $ => seq(FUNCTION, field("name", $.identifier), field("arguments", $.function_arguments), field("body", $.block_statement)),
+    function_arguments: $ => seq('(', commaSep($.identifier), ')'),
 
-    if_statement: $ => seq(IF, '(', $.expression, ')', $.block_statement, optional(seq(ELSE, $.block_statement))),
+    if_statement: $ => seq(IF, '(', $._expression, ')', $.block_statement, optional(seq(ELSE, $.block_statement))),
 
     import_statement: $ => seq(IMPORT, $.identifier, ';'),
 
-    let_assign_statement: $ => seq(LET, $.identifier, ASSIGN, $.expression, ';'),
+    let_assign_statement: $ => seq(LET, field("variable", $.identifier), ASSIGN, field("value", $._expression), ';'),
 
     // TODO: Seems like parallel statements really want to be parallel expressions.
     parallel_statement: $ => choice(
@@ -97,14 +96,15 @@ module.exports = grammar({
 
     parallel_blocks: $ => commaSep1($.block_statement),
 
-    return_statement: $ => seq('return', $.expression, ';'),
+    return_statement: $ => seq('return', $._expression, ';'),
 
-    while_statement: $ => seq(WHILE, '(', $.expression, ')', $.block_statement),
+    while_statement: $ => seq(WHILE, '(', $._expression, ')', $.block_statement),
 
     // Expressions
 
     expressions: $ => commaSep1($.expression),
     expression: $ => choice(
+      prec(2, $.literal),
       seq('(', $.expression, ')'),
       prec.left(1, seq($.expression, $.binary_operation, $.expression)),
       seq($.unary_operation, $.expression),
@@ -113,40 +113,52 @@ module.exports = grammar({
       $.call,
       $.identifier,
       $.instance,
-      $.literal,
       $.projection,
     ),
 
-    binary_operation: $ => choice( "&&", "=", ">", ">=", "<", "<=", "-", "!=", "||", "%", "+", "/", "*"),
+    _expressions: $ => commaSep1($._expression),
+    _expression: $ => choice(
+      prec(2, $.literal),
+      seq('(', $._expression, ')'),
+      prec.left(1, seq($._expression, $.binary_operation, $._expression)),
+      seq($.unary_operation, $._expression),
+      $.array,
+      $.indexed_array,
+      $.call,
+      $.identifier,
+      $.instance,
+      $.projection,
+    ),
+
+    binary_operation: $ => choice("&&", "=", ">", ">=", "<", "<=", "-", "!=", "||", "%", "+", "/", "*"),
 
     unary_operation: $ => choice("!", "-"),
 
-    array: $ => seq('[', $.expressions, ']'),
-    indexed_array: $ => seq($.array, '[', $.expression, ']'),
+    array: $ => seq('[', commaSep($._expression), ']'),
+    indexed_array: $ => seq($.array, '[', $._expression, ']'),
 
-    call: $ => seq(choice($.identifier, $.projection), '(', optional($.expressions), ')'),
+    call: $ => seq(choice(field("function", $.identifier), $.projection), field("arguments", $.call_arguments)),
 
-    projection: $ => choice(
-      seq($.identifier, '.', $.projection),
-      seq($.identifier, '.', $.identifier),
-    ),
+    call_arguments: $ => seq('(', commaSep($._expression), ')'),
 
-    instance: $ => seq(NEW, $.identifier, '(', optional($.instance_properties), ')'),
+    projection: $ => seq(field('first', $.identifier), repeat(seq('.', $.identifier)), seq('.', field('last', $.identifier))),
+
+    instance: $ => seq(NEW, field("type", $.identifier), '{', optional(field("body", $.instance_properties)), '}'),
 
     instance_properties: $ => commaSep1($.instance_property),
-    instance_property: $ => seq($.identifier, ASSIGN, $.expression),
+    instance_property: $ => seq(field("key", $.identifier), ASSIGN, field("value", $.expression)),
 
     identifier: $ => /[a-zA-Z_][a-zA-Z0-9_]*/,
-    literal: $ => choice($.boolean, $.integer, "null", $.real, $.string),
+    literal: $ => choice(prec(2, $.boolean), $.integer, "null", $.real, $.string),
 
     line_comment: $ => seq('//', /[^\n]*/),
     block_comment: $ => token(seq('/*', /.*?\*\//)),
 
     // Tokens with values
-    boolean: $ => /(true,false)/,
-    integer: $ => /([0-9]_)+/,
-    real: $ => /([0-9]_)*\.([0-9]_)+([eE][+\-]?([0-9]_)+)?/,
-    string: $ => /\"([^\"\\]|\\[\"'ntr\\])*\"/
+    boolean: $ => token(prec(2, /(true|false)/)),
+    integer: $ => token(/([0-9_])+/),
+    real: $ => token(/([0-9_])*\.([0-9_])+([eE][+\-]?([0-9_])+)?/),
+    string: $ => token(/\"([^\"\\]|\\[\"'ntr\\])*\"/)
   }
 });
 
